@@ -107,21 +107,24 @@ footer — rendered by [`src/cards.py`](src/cards.py) (Pillow). Skip with
 
 ## Image hosting (GitHub Pages)
 
-The Graph API needs a *public* image URL, so cards are hosted on GitHub Pages by
-[`src/host.py`](src/host.py): it copies each card into a `pages/` repo, writes
-the resulting public `image_url` back into the draft JSON, and pushes.
+The Graph API needs a *public* image URL, so cards are hosted on this repo's own
+GitHub Pages by [`src/host.py`](src/host.py): it copies each card into
+`docs/cards/<account>/`, writes the public `image_url` back into the draft JSON,
+commits, pushes, and enables Pages.
 
-**One-time setup:**
-1. In `.env`: `GITHUB_USER=<your-github-username>` (repo name defaults to
-   `science-instagram-cards`; override with `GITHUB_PAGES_REPO`).
-2. Create a **public** repo of that name on GitHub — or install `gh`
-   (`brew install gh && gh auth login`) and `src/host.py` creates it for you.
-3. Repo **Settings → Pages → Deploy from branch → `main` / root**.
-4. Run `python3 -m src.host`.
+**Config** (`.env`, auto-loaded):
+```
+GITHUB_USER=saanviiyer
+GITHUB_PAGES_REPO=science-instagram-bot
+```
+
+**Run:** `python3 -m src.host` — needs `gh auth login` (or a git credential
+helper) done once. Pages is served from `main` branch `/docs`.
 
 URLs look like
-`https://<user>.github.io/science-instagram-cards/cards/<account>/<id>.png`.
-The daily job runs this automatically once `GITHUB_USER` is set.
+`https://saanviiyer.github.io/science-instagram-bot/cards/<account>/<id>.png`.
+The daily job runs this automatically. Note: this pushes the project to a
+**public** repo (secrets in `.env` stay local — it's gitignored).
 
 ## Scheduling (installed)
 

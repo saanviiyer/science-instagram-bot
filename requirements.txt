@@ -1,0 +1,2 @@
+# Optional dependency for LLM-mode captions (template mode needs nothing).
+anthropic>=0.40.0

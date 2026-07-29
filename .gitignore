@@ -1,0 +1,5 @@
+drafts/
+pages/
+.env
+__pycache__/
+*.pyc
