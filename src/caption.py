@@ -58,19 +58,44 @@ def _template_caption(article, account_cfg, source_name):
 _LLM_PROMPT = """You write Instagram captions for a science-news account called \
 "{display_name}" that covers {topic_line}.
 
-Write an original, engaging caption for the research article below. Requirements:
-- 2-4 short sentences (~60-90 words). Plain, exciting, accurate language for a \
-general-but-curious audience.
-- Open with a strong hook. Do NOT copy phrasing from the abstract — paraphrase \
-in your own words.
-- Explain why it matters. No hype, no fabricated results.
-- End with a call to read the study. Do NOT include hashtags (added separately).
-- Include 1-2 tasteful emoji max.
+Write an original caption for the research article below.
+
+Content rules:
+- 2 to 4 sentences, about 60 to 90 words. Plain, clear language for a curious \
+general reader.
+- Paraphrase the abstract in your own words. Never copy its phrasing and never \
+quote more than a few words.
+- Say what the finding is and why it matters. No hype, no invented results.
+- End with a short line inviting people to read the study.
+- At most one emoji. Do not add hashtags (they are added separately).
+
+Writing style (follow strictly):
+- No em dashes anywhere. Use a period, comma, or parentheses instead.
+- No semicolons joining two clauses that could be sentences. No colon used for a \
+dramatic reveal.
+- Do not use a list of three parallel items in a sentence.
+- Do not use the "not just X, it's Y" construction in any form.
+- Do not open with a manufactured hook or a rhetorical question you then answer.
+- Do not end with a summary line that restates what you just said.
+- Avoid these words: framework, leverage, unlock, elevate, delve, dive into, \
+navigate, landscape, robust, holistic, seamless, streamline, empower, foster, \
+harness, unpack, game-changer, cutting-edge, myriad, plethora, boasts, \
+showcases, paves the way, plays a crucial/pivotal role, in today's world, when \
+it comes to, it's worth noting, it's important to note, ultimately.
+- Say things plainly. Let sentence length vary with the content rather than a beat.
 
 Article title: {title}
-Abstract (source material — paraphrase, never quote at length): {abstract}
+Abstract (source material, paraphrase and do not quote at length): {abstract}
 
 Return only the caption text."""
+
+
+def _enforce_style(text):
+    """Deterministic backstop for the writing rules the prompt asks for:
+    no em/en dashes reach a published caption even if the model slips."""
+    text = text.replace(" — ", ", ").replace("—", ", ")
+    text = text.replace(" – ", ", ").replace("–", "-")
+    return text.strip()
 
 
 def _llm_caption(article, account_cfg):
@@ -95,7 +120,8 @@ def _llm_caption(article, account_cfg):
                 ),
             }],
         )
-        return "".join(b.text for b in msg.content if b.type == "text").strip()
+        raw = "".join(b.text for b in msg.content if b.type == "text").strip()
+        return _enforce_style(raw)
     except Exception as exc:
         print(f"  ! LLM caption failed, using template: {exc}")
         return None
@@ -105,11 +131,13 @@ def build_caption(article, account_key, account_cfg, common_tags, source_name="N
     """Return a dict: {caption, hashtags, full_text} for one article."""
     llm = _llm_caption(article, account_cfg)
     if llm:
-        src = f"📄 Source: {source_name} — " if source_name else "📄 Read more: "
+        src = f"📄 Source ({source_name}): " if source_name else "📄 Read more: "
         caption = f"{llm}\n\n{src}{article['link']}"
     else:
-        caption = _template_caption(article, account_cfg, source_name).replace(
-            "{account_handle}", account_key
+        caption = _enforce_style(
+            _template_caption(article, account_cfg, source_name).replace(
+                "{account_handle}", account_key
+            )
         )
 
     hashtags = _select_hashtags(account_cfg, common_tags)

@@ -42,8 +42,10 @@ Add, remove, or retune feeds and hashtags there.
 - **Template (default, no setup):** builds a clean caption from the article
   title + abstract. Good enough to review and post manually.
 - **LLM (recommended):** set `ANTHROPIC_API_KEY` and `pip install anthropic`.
-  Claude then writes an original, paraphrased, engaging caption (model
-  `claude-sonnet-5`). Never copies source text — important for copyright.
+  Claude then writes an original, paraphrased caption (model `claude-sonnet-5`).
+  Never copies source text (copyright). The prompt enforces house writing rules
+  (no em dashes, no marketing vocabulary, no manufactured hooks), and a
+  deterministic guard strips any em/en dash that slips through.
 
 Abstracts come from **Crossref** (open API, by DOI) for Nature articles, and
 from the feed's own summary for institutional feeds. Nature article pages sit
