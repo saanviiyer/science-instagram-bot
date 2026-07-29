@@ -100,12 +100,22 @@ MIT/Harvard/Berkeley/Stanford use native newsroom RSS; Caltech (no public feed)
 uses a Google News query. Add more schools by copying an entry. Google News
 titles carry a " - Source" suffix that the LLM caption mode cleans up.
 
-## Image cards
+## Image cards (carousels)
 
-Every draft gets a post-ready 1080×1080 PNG (`drafts/<account>/<id>.png`) with a
-per-account gradient, the account handle, the auto-sized title, and a source
-footer — rendered by [`src/cards.py`](src/cards.py) (Pillow). Skip with
-`--no-cards`.
+Every draft gets a post-ready **carousel** of 1080×1080 PNG slides
+(`drafts/<account>/<id>_1.png`, `_2`, `_3`), rendered by
+[`src/cards.py`](src/cards.py) (Pillow):
+1. Title slide (per-account gradient, handle, auto-sized title, "swipe" hint)
+2. "What they found" slide (short factual summary from the abstract)
+3. Follow/source CTA slide
+
+Multi-image posts get more reach and saves than single images. Skip card
+generation with `--no-cards`. Publishing sends all slides as one carousel; a
+single-image draft still posts fine.
+
+Hashtags are **tiered** (niche / mid / broad) and rotate per post, so a new
+account can rank on smaller tags instead of repeating one generic set. Tiers
+live in [`config/accounts.py`](config/accounts.py).
 
 ## Image hosting (GitHub Pages)
 

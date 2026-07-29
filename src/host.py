@@ -76,20 +76,27 @@ def prepare_docs():
 
 
 def sync(user, repo):
-    """Copy cards into docs/, rewrite draft image_urls, return count."""
+    """Copy every carousel slide into docs/, rewrite draft image_urls."""
     n = 0
     for json_path in glob.glob(os.path.join(DRAFTS, "*", "*.json")):
         with open(json_path) as f:
             draft = json.load(f)
-        src_png = draft.get("image_path")
-        if not src_png or not os.path.exists(src_png):
+        # support both the carousel list and the legacy single-image field
+        slides = draft.get("image_paths") or (
+            [draft["image_path"]] if draft.get("image_path") else [])
+        slides = [p for p in slides if p and os.path.exists(p)]
+        if not slides:
             continue
         account = draft["account"]
-        filename = os.path.basename(src_png)
         dst_dir = os.path.join(DOCS, "cards", account)
         os.makedirs(dst_dir, exist_ok=True)
-        shutil.copy2(src_png, os.path.join(dst_dir, filename))
-        draft["image_url"] = public_url(user, repo, account, filename)
+        urls = []
+        for src_png in slides:
+            filename = os.path.basename(src_png)
+            shutil.copy2(src_png, os.path.join(dst_dir, filename))
+            urls.append(public_url(user, repo, account, filename))
+        draft["image_urls"] = urls
+        draft["image_url"] = urls[0]
         with open(json_path, "w") as f:
             json.dump(draft, f, indent=2)
         n += 1

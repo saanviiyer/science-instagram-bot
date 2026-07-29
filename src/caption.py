@@ -10,17 +10,49 @@ Hashtags are assembled from the account's curated pool + shared science tags,
 capped for Instagram readability.
 """
 
+import collections
 import os
 import textwrap
 
 MODEL = "claude-sonnet-5"
-MAX_HASHTAGS = 12
+MAX_HASHTAGS = 14
 CAPTION_CHAR_TARGET = 550  # comfortably under IG's 2,200 limit
 
 
-def _select_hashtags(account_cfg, common_tags):
-    tags = list(dict.fromkeys(account_cfg["hashtags"] + common_tags))
-    return tags[:MAX_HASHTAGS]
+def _rotate(items, seed):
+    if not items:
+        return []
+    d = collections.deque(items)
+    d.rotate(-(seed % len(items)))
+    return list(d)
+
+
+def _select_hashtags(account_cfg, common_tags, seed=0):
+    """Mix niche/mid/broad tags, rotating within each tier so posts vary.
+
+    Accepts either a tiered dict {niche,mid,broad} or a flat list (institutions).
+    """
+    tags = account_cfg["hashtags"]
+    if isinstance(tags, dict):
+        picked = (
+            _rotate(tags.get("niche", []), seed)[:6]
+            + _rotate(tags.get("mid", []), seed)[:4]
+            + _rotate(tags.get("broad", []) + list(common_tags), seed)[:4]
+        )
+    else:
+        picked = _rotate(tags, seed)[:9] + list(common_tags)[:4]
+    return list(dict.fromkeys(picked))[:MAX_HASHTAGS]
+
+
+def summarize(abstract, max_len=320):
+    """Trim an abstract to a short factual summary (first sentences)."""
+    if not abstract or not abstract.strip():
+        return ""
+    text = " ".join(abstract.replace("\n", " ").split())
+    if len(text) > max_len:
+        cut = text[:max_len].rsplit(". ", 1)[0]
+        text = (cut + ".") if cut else (text[:max_len] + "…")
+    return _enforce_style(text)
 
 
 def _hook_prefix(account_cfg):
@@ -35,15 +67,8 @@ def _source_line(source_name):
 
 def _template_caption(article, account_cfg, source_name):
     """No-API fallback: build a clean caption from title + abstract."""
-    abstract = article.get("abstract", "").strip()
-    if abstract:
-        # first ~2 sentences, trimmed — an original framing, not a copy
-        summary = " ".join(abstract.replace("\n", " ").split())
-        if len(summary) > 320:
-            cut = summary[:320].rsplit(". ", 1)[0]
-            summary = cut + "." if cut else summary[:320] + "…"
-    else:
-        summary = "Read the full study for the details."
+    summary = summarize(article.get("abstract", "")) or \
+        "Read the full study for the details."
 
     body = (
         f"{_hook_prefix(account_cfg)}\n\n"
@@ -127,7 +152,7 @@ def _llm_caption(article, account_cfg):
         return None
 
 
-def build_caption(article, account_key, account_cfg, common_tags, source_name="Nature"):
+def build_caption(article, account_key, account_cfg, common_tags, source_name="Nature", seed=0):
     """Return a dict: {caption, hashtags, full_text} for one article."""
     llm = _llm_caption(article, account_cfg)
     if llm:
@@ -140,7 +165,7 @@ def build_caption(article, account_key, account_cfg, common_tags, source_name="N
             )
         )
 
-    hashtags = _select_hashtags(account_cfg, common_tags)
+    hashtags = _select_hashtags(account_cfg, common_tags, seed)
     full_text = f"{caption}\n\n" + " ".join(hashtags)
     return {
         "caption": caption,

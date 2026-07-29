@@ -91,7 +91,8 @@ def draft_account(account_key, limit, within_days, args_no_cards=False):
     os.makedirs(out_dir, exist_ok=True)
     drafts = []
     for i, art in enumerate(articles, 1):
-        built = caption.build_caption(art, account_key, cfg, COMMON_TAGS, SOURCE_NAME)
+        built = caption.build_caption(art, account_key, cfg, COMMON_TAGS,
+                                      SOURCE_NAME, seed=i)
         draft = {
             "id": f"{_today()}_{i:02d}_{_slug(art['title'])}",
             "account": account_key,
@@ -102,16 +103,20 @@ def draft_account(account_key, limit, within_days, args_no_cards=False):
             "caption": built["caption"],
             "hashtags": built["hashtags"],
             "full_text": built["full_text"],
-            "image_path": None,  # local PNG card (below)
-            "image_url": None,   # public URL — fill after hosting, before publishing
+            "image_paths": [],   # local carousel slide PNGs (below)
+            "image_urls": [],    # public URLs — filled after hosting
+            "image_path": None,  # slide 1 (preview / single-image fallback)
+            "image_url": None,   # slide 1 public URL
         }
 
         if _CARDS_OK and not args_no_cards:
-            card_path = os.path.join(out_dir, draft["id"] + ".png")
             try:
-                cards.generate_card(account_key, cfg["display_name"],
-                                    art["title"], SOURCE_NAME, card_path)
-                draft["image_path"] = card_path
+                slides = cards.generate_carousel(
+                    account_key, cfg["display_name"], art["title"],
+                    caption.summarize(art.get("abstract", "")),
+                    cfg["topic_line"], SOURCE_NAME, out_dir, draft["id"])
+                draft["image_paths"] = slides
+                draft["image_path"] = slides[0] if slides else None
             except Exception as exc:
                 print(f"    ! card render failed: {exc}")
 
@@ -124,8 +129,8 @@ def draft_account(account_key, limit, within_days, args_no_cards=False):
             f.write(f"**Account:** @{account_key}  \n")
             f.write(f"**Source:** {art['link']}  \n")
             f.write(f"**Published:** {draft['published']}\n\n")
-            if draft["image_path"]:
-                f.write(f"![card]({os.path.basename(draft['image_path'])})\n\n")
+            for n, p in enumerate(draft["image_paths"], 1):
+                f.write(f"![slide {n}]({os.path.basename(p)})\n\n")
             f.write("---\n\n")
             f.write(built["full_text"] + "\n")
         drafts.append(draft)
@@ -170,13 +175,17 @@ def cmd_publish(args):
         return
     with open(path) as f:
         draft = json.load(f)
-    image_url = args.image_url or draft.get("image_url")
+    if args.image_url:
+        image_urls = [args.image_url]
+    else:
+        image_urls = draft.get("image_urls") or (
+            [draft["image_url"]] if draft.get("image_url") else [])
     result = publish.publish(
-        args.account, draft["full_text"], image_url, confirm=args.confirm
+        args.account, draft["full_text"], image_urls, confirm=args.confirm
     )
     print(json.dumps(result, indent=2))
     if result["status"] == "dry-run":
-        print("\n(dry run — add credentials + --image-url + --confirm to post for real)")
+        print("\n(dry run — add credentials + --confirm to post for real)")
 
 
 def main():

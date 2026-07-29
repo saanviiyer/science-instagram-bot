@@ -52,23 +52,30 @@ def _post(url, params):
         return json.loads(resp.read().decode())
 
 
-def publish(account_key, caption, image_url, confirm=False):
-    """Publish (or dry-run) one image post to an account.
+def publish(account_key, caption, image_urls, confirm=False):
+    """Publish (or dry-run) a post to an account.
 
-    Returns a result dict. Never posts unless credentials exist AND confirm=True.
+    `image_urls` may be a single URL string or a list. One URL posts a single
+    image; two or more posts a carousel. Never posts unless credentials exist
+    AND confirm=True.
     """
+    if isinstance(image_urls, str):
+        image_urls = [image_urls]
+    image_urls = [u for u in (image_urls or []) if u]
+
     ig_user_id, token = credentials(account_key)
 
     plan = {
         "account": account_key,
-        "image_url": image_url,
+        "image_urls": image_urls,
+        "slides": len(image_urls),
         "caption_preview": caption[:120] + ("…" if len(caption) > 120 else ""),
         "has_credentials": bool(ig_user_id and token),
         "confirmed": bool(confirm),
     }
 
-    if not image_url:
-        plan.update(status="blocked", reason="Instagram feed posts require an image_url.")
+    if not image_urls:
+        plan.update(status="blocked", reason="Instagram feed posts require an image.")
         return plan
     if not (ig_user_id and token):
         plan.update(status="dry-run",
@@ -79,14 +86,37 @@ def publish(account_key, caption, image_url, confirm=False):
         return plan
 
     # --- real publish ---
-    container = _post(f"{GRAPH_BASE}/{ig_user_id}/media", {
-        "image_url": image_url,
-        "caption": caption,
-        "access_token": token,
-    })
-    creation_id = container.get("id")
+    if len(image_urls) == 1:
+        container = _post(f"{GRAPH_BASE}/{ig_user_id}/media", {
+            "image_url": image_urls[0],
+            "caption": caption,
+            "access_token": token,
+        })
+        creation_id = container.get("id")
+    else:
+        # carousel: one child container per slide, then a parent container
+        child_ids = []
+        for url in image_urls:
+            child = _post(f"{GRAPH_BASE}/{ig_user_id}/media", {
+                "image_url": url,
+                "is_carousel_item": "true",
+                "access_token": token,
+            })
+            if not child.get("id"):
+                plan.update(status="error", reason="child container failed",
+                            response=child)
+                return plan
+            child_ids.append(child["id"])
+        parent = _post(f"{GRAPH_BASE}/{ig_user_id}/media", {
+            "media_type": "CAROUSEL",
+            "children": ",".join(child_ids),
+            "caption": caption,
+            "access_token": token,
+        })
+        creation_id = parent.get("id")
+
     if not creation_id:
-        plan.update(status="error", reason="No creation_id", response=container)
+        plan.update(status="error", reason="No creation_id")
         return plan
 
     result = _post(f"{GRAPH_BASE}/{ig_user_id}/media_publish", {
