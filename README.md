@@ -138,26 +138,41 @@ URLs look like
 The daily job runs this automatically. Note: this pushes the project to a
 **public** repo (secrets in `.env` stay local — it's gitignored).
 
+## Location note (important)
+
+The real project lives at `~/science-instagram-bot`, NOT in `~/Downloads`.
+macOS blocks background (launchd) jobs from reading files in `~/Downloads`,
+`~/Documents`, and `~/Desktop`, so automation there fails silently. A symlink at
+`~/Downloads/CALTECH/science-instagram-bot` points back to the real folder for
+convenient browsing. Edit files through either path; run automation from the
+real one.
+
 ## Scheduling (installed)
 
-A macOS LaunchAgent runs the drafts every day at **07:00**:
+Two macOS LaunchAgents, with their runner scripts kept OUTSIDE `~/Downloads` at
+`~/Library/Application Support/science-instagram-bot/` (so launchd can execute
+them):
 
+**Drafting** — every day at 07:00:
 - Agent: `~/Library/LaunchAgents/com.saanvi.science-instagram.plist`
-- Runner: [`run_daily.sh`](run_daily.sh) → `draft --all --limit 2`, logs to `drafts/_logs/`
+- Runner: `run_daily.sh` → `draft --all --limit 2`, then `src.host`.
+
+**Posting** — checks every 30 minutes, posts each account at its own slot
+(`config/schedule.py`) once that time has passed:
+- Agent: `~/Library/LaunchAgents/com.saanvi.science-instagram-post.plist`
+- Runner: `run_post.sh` → `post-due`. Stays a silent no-op until you add IG
+  tokens AND set `AUTO_PUBLISH=1` in `.env` (deliberate opt-in to auto-posting).
 
 ```bash
-# change the time: edit Hour/Minute in the plist, then reload
+# change a time: edit the plist (drafting) or config/schedule.py (posting), then:
 launchctl unload ~/Library/LaunchAgents/com.saanvi.science-instagram.plist
 launchctl load  ~/Library/LaunchAgents/com.saanvi.science-instagram.plist
 
-# run it right now to test
-bash run_daily.sh
-
-# stop it permanently
-launchctl unload ~/Library/LaunchAgents/com.saanvi.science-instagram.plist
+# run drafting now to test
+bash "$HOME/Library/Application Support/science-instagram-bot/run_daily.sh"
 ```
 
-The Mac must be awake at 07:00; if asleep, launchd runs the job at next wake.
+The Mac must be awake at the scheduled time; if asleep, launchd runs at next wake.
 Uncomment the institutions line in `run_daily.sh` to draft those too.
 
 ## Copyright & safety notes
