@@ -188,6 +188,57 @@ def cmd_publish(args):
         print("\n(dry run — add credentials + --confirm to post for real)")
 
 
+def _load_draft(path):
+    with open(path) as f:
+        return json.load(f)
+
+
+def cmd_post_due(args):
+    """Publish each account's freshest un-posted draft once its slot passed.
+
+    Real posting requires per-account tokens AND opt-in (--confirm or
+    AUTO_PUBLISH=1). Otherwise every account dry-runs. A draft is only marked
+    posted on a real success, so nothing double-posts.
+    """
+    from config.schedule import POST_SLOTS
+
+    confirm = args.confirm or os.environ.get("AUTO_PUBLISH") == "1"
+    now = datetime.now()
+    today = now.strftime("%Y-%m-%d")
+
+    for account, hhmm in POST_SLOTS.items():
+        if account not in ACCOUNTS:
+            continue
+        hh, mm = (int(x) for x in hhmm.split(":"))
+        slot = now.replace(hour=hh, minute=mm, second=0, microsecond=0)
+        if now < slot:
+            continue
+
+        d = os.path.join(DRAFTS_DIR, account)
+        if not os.path.isdir(d):
+            continue
+        jsons = sorted(os.path.join(d, f) for f in os.listdir(d) if f.endswith(".json"))
+        drafts = [(_load_draft(p), p) for p in jsons]
+
+        if any((dr.get("posted_at") or "").startswith(today) for dr, _ in drafts):
+            continue  # already posted today
+        unposted = [(dr, p) for dr, p in drafts if not dr.get("posted_at")]
+        if not unposted:
+            continue
+
+        draft, path = unposted[-1]  # freshest
+        image_urls = draft.get("image_urls") or (
+            [draft["image_url"]] if draft.get("image_url") else [])
+        result = publish.publish(account, draft["full_text"], image_urls, confirm=confirm)
+        print(f"[{hhmm}] @{account}: {result['status']}"
+              + (f" ({result.get('reason')})" if result.get("reason") else ""))
+        if result["status"] == "published":
+            draft["posted_at"] = now.isoformat()
+            draft["media_id"] = result.get("media_id")
+            with open(path, "w") as f:
+                json.dump(draft, f, indent=2)
+
+
 def main():
     p = argparse.ArgumentParser(description="Science Instagram pipeline")
     p.add_argument("--config", choices=["topics", "institutions"], default="topics",
@@ -213,6 +264,12 @@ def main():
     pub.add_argument("--image-url")
     pub.add_argument("--confirm", action="store_true")
     pub.set_defaults(func=cmd_publish)
+
+    pd = sub.add_parser("post-due",
+                        help="publish accounts whose scheduled slot has passed")
+    pd.add_argument("--confirm", action="store_true",
+                    help="actually post (also enabled by AUTO_PUBLISH=1)")
+    pd.set_defaults(func=cmd_post_due)
 
     args = p.parse_args()
     _load_config(args.config)

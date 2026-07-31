@@ -55,29 +55,44 @@ def summarize(abstract, max_len=320):
     return _enforce_style(text)
 
 
-def _hook_prefix(account_cfg):
-    return f"🔬 New in {account_cfg['display_name'].replace(' News', '')}"
+def _subject(account_cfg):
+    return (account_cfg["display_name"]
+            .replace(" News", "").replace(" Research", " research"))
+
+
+# Closing prompts to the audience. Genuine questions/invites (not the banned
+# "open with a question you answer yourself"). {subject} is filled per account.
+_QUESTIONS = [
+    "What would you want researchers to look at next in {subject}?",
+    "Does this change how you think about {subject}?",
+    "Surprising, or did you see this coming?",
+    "Worth a save if you follow {subject}. What stands out to you?",
+    "How do you think this plays out over the next few years?",
+    "Curious what you make of this. Tell us below.",
+]
 
 
 def _source_line(source_name):
     if source_name:
-        return f"📄 Source: {source_name} (link in bio 👆 / below)."
-    return "📄 Read the full story (link in bio 👆 / below)."
+        return f"📄 Source: {source_name} (link in bio 👆)"
+    return "📄 Full story in bio 👆"
 
 
-def _template_caption(article, account_cfg, source_name):
-    """No-API fallback: build a clean caption from title + abstract."""
-    summary = summarize(article.get("abstract", "")) or \
-        "Read the full study for the details."
+def _template_caption(article, account_cfg, source_name, seed=0):
+    """No-API caption: lead with the finding, then a question to the audience."""
+    subject = _subject(account_cfg)
+    summary = summarize(article.get("abstract", ""))
+    lead = summary if summary else f"A new study on {article['title'].rstrip('.').lower()}."
+    question = _rotate(_QUESTIONS, seed)[0].format(subject=subject)
 
-    body = (
-        f"{_hook_prefix(account_cfg)}\n\n"
-        f"“{article['title']}”\n\n"
-        f"{summary}\n\n"
+    parts = [
+        lead,
+        f"“{article['title']}”",
+        question,
         f"{_source_line(source_name)}\n"
-        f"Follow @{{account_handle}} for {account_cfg['topic_line']}."
-    )
-    return body
+        f"Follow @{{account_handle}} for {account_cfg['topic_line']}.",
+    ]
+    return "\n\n".join(parts)
 
 
 _LLM_PROMPT = """You write Instagram captions for a science-news account called \
@@ -160,7 +175,7 @@ def build_caption(article, account_key, account_cfg, common_tags, source_name="N
         caption = f"{llm}\n\n{src}{article['link']}"
     else:
         caption = _enforce_style(
-            _template_caption(article, account_cfg, source_name).replace(
+            _template_caption(article, account_cfg, source_name, seed).replace(
                 "{account_handle}", account_key
             )
         )
