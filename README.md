@@ -2,8 +2,8 @@
 
 Pulls recent research (Nature per-subject feeds for topic accounts; university
 newsrooms for institution accounts), writes an original Instagram caption +
-hashtags for each, saves review-ready drafts, and — once real accounts and API
-tokens exist — publishes them via the Instagram Graph API behind a per-post
+hashtags for each, saves review-ready drafts, and, once real accounts and API
+tokens exist, publishes them via the Instagram Graph API behind a per-post
 approval gate.
 
 Runs on the Python standard library alone. `anthropic` is optional (better
@@ -51,7 +51,7 @@ Abstracts come from **Crossref** (open API, by DOI) for Nature articles, and
 from the feed's own summary for institutional feeds. Nature article pages sit
 behind a bot challenge, so we never scrape them directly.
 
-## Publishing to Instagram — what you must set up
+## Publishing to Instagram: what you must set up
 
 Instagram has **no simple "post this" API**. Auto-publishing requires, per
 account:
@@ -85,12 +85,12 @@ python3 -m src.pipeline publish \
 
 **Safety gate:** [`src/publish.py`](src/publish.py) refuses to post unless
 credentials exist **and** you pass `--confirm`. Without both it prints a dry
-run of exactly what would be sent. This is deliberate — automated public
+run of exactly what would be sent. This is deliberate, automated public
 posting stays behind an explicit per-post approval.
 
 > Because the 11 accounts don't exist yet, the publish step can't fire until
-> you create them and add tokens. Everything else — fetch, summarize, caption,
-> hashtags, drafts — works today, and the publish code is written and waiting.
+> you create them and add tokens. Everything else, fetch, summarize, caption,
+> hashtags, drafts, works today, and the publish code is written and waiting.
 
 ## Institution accounts
 
@@ -130,13 +130,13 @@ GITHUB_USER=saanviiyer
 GITHUB_PAGES_REPO=science-instagram-bot
 ```
 
-**Run:** `python3 -m src.host` — needs `gh auth login` (or a git credential
+**Run:** `python3 -m src.host`, needs `gh auth login` (or a git credential
 helper) done once. Pages is served from `main` branch `/docs`.
 
 URLs look like
 `https://saanviiyer.github.io/science-instagram-bot/cards/<account>/<id>.png`.
 The daily job runs this automatically. Note: this pushes the project to a
-**public** repo (secrets in `.env` stay local — it's gitignored).
+**public** repo (secrets in `.env` stay local. It's gitignored).
 
 ## Location note (important)
 
@@ -153,11 +153,11 @@ Two macOS LaunchAgents, with their runner scripts kept OUTSIDE `~/Downloads` at
 `~/Library/Application Support/science-instagram-bot/` (so launchd can execute
 them):
 
-**Drafting** — every day at 07:00:
+**Drafting**. Every day at 07:00:
 - Agent: `~/Library/LaunchAgents/com.saanvi.science-instagram.plist`
 - Runner: `run_daily.sh` → `draft --all --limit 2`, then `src.host`.
 
-**Posting** — checks every 30 minutes, posts each account at its own slot
+**Posting**, checks every 30 minutes, posts each account at its own slot
 (`config/schedule.py`) once that time has passed:
 - Agent: `~/Library/LaunchAgents/com.saanvi.science-instagram-post.plist`
 - Runner: `run_post.sh` → `post-due`. Stays a silent no-op until you add IG
